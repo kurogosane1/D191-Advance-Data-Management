@@ -80,28 +80,20 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-DELETE FROM Sales_Location_Summary;
-INSERT INTO Sales_Location_Summary (
-    location,
-    Sales
-)
-SELECT
-city.city||', '||country.country AS city_address,
-CAST(SUM(payment.amount) as money)
-FROM payment
-INNER JOIN staff
-ON payment.staff_id = staff.staff_id
-INNER JOIN store
-ON payment.staff_id = store.manager_staff_id
-INNER JOIN address
-ON store.address_id=address.address_id
-INNER JOIN city
-ON city.city_id =address.city_id
-INNER JOIN country
-ON city.country_id = country.country_id
-GROUP by payment.staff_id, staff.staff_id,address.address_id, city.city,country.country_id
-ORDER BY city_address, SUM(payment.amount);
-RETURN NEW;
+    EXCEPTION WHEN summary_data_refresh THEN NULL;
+    -- OLD DATA NEEDS TO BE CLEARED OUT SO DATA IS FIRST CLEARED OUT
+    DELETE FROM Sales_Location_Summary;
+    -- NEW DATA IS THEN INSERTED
+    INSERT INTO Sales_Location_Summary (
+        location,
+        Sales
+    )
+    SELECT 
+    c.location,
+    SUM(c.sale)
+    FROM sales_location_detailed AS c
+    GROUP BY c.location;
+    RETURN NEW;
 END
 $$;
 
@@ -157,4 +149,13 @@ ORDER BY city_address DESC;
 END$$;
 
 
--- THIS PROCEDURE WILL THEN LEAD TO THE DATA BEING PRESENTED 
+-- THIS PROCEDURE WILL THEN LEAD TO THE DATA BEING REFRESHED AND WILL TRIGGER THE OTHER FUNCTION
+
+-- THIS WILL BE CALLING THE MAIN TABLE
+CALL refresh_data();
+
+-- NOW YOU CAN VIEW THE NEW DATA HERE
+SELECT * FROM Sales_Location_Detailed;
+
+-- THE SUMMARY DATA CAN BE VIEWED HERE
+SELECT * FROM Sales_Location_Summary;
